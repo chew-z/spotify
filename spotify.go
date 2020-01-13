@@ -230,7 +230,7 @@ func (c *Client) get(url string, result interface{}) error {
 		req, _ := http.NewRequest("GET", url, nil)
 		req.Header.Set("If-None-Match", etag)
 		resp, err := c.http.Do(req)
-		log.Printf("spotify: respone: %s", resp.StatusCode)
+		log.Printf("spotify: respone: %d", resp.StatusCode)
 		if err != nil {
 			return err
 		}
@@ -243,12 +243,12 @@ func (c *Client) get(url string, result interface{}) error {
 		if resp.StatusCode == http.StatusNoContent {
 			return nil
 		}
-		if resp.StatusCode != http.StatusOK || resp.StatusCode != http.StatusNotModified {
+		if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNotModified {
 			return c.decodeError(resp)
 		}
 		if resp.StatusCode == http.StatusNotModified {
 			err = json.Unmarshal((*cachedBody), &result)
-			log.Println("spotify using cached response")
+			log.Println("spotify: using cached response")
 		}
 		if resp.StatusCode == http.StatusOK {
 			err = json.NewDecoder(resp.Body).Decode(result)
