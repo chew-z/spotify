@@ -216,9 +216,9 @@ func retryDuration(resp *http.Response) time.Duration {
 func (c *Client) get(url string, result interface{}) error {
 	type cachedResponse struct {
 		etag      string
-		bodyBytes *[]byte
+		bodyBytes []byte
 	}
-	var cachedBody *[]byte
+	var cachedBody []byte
 	var etag string
 	k, found := kaszka.Get(url)
 	if found {
@@ -322,7 +322,7 @@ func cacheResponse(res *http.Response, url string) {
 		cR.etag = etag.Generate(string(bodyBytes), false)
 	}
 	log.Printf("Etag: %s", cR.etag)
-	cR.bodyBytes = &bodyBytes
+	cR.bodyBytes = bodyBytes
 	kaszka.Set(url, cR, ed)
 	return
 }
