@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"log"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -246,6 +247,7 @@ func (c *Client) get(url string, result interface{}) error {
 		}
 		if resp.StatusCode == http.StatusNotModified {
 			err = json.Unmarshal((*cachedBody), &result)
+			log.Println("spotify using cached response")
 		}
 		if resp.StatusCode == http.StatusOK {
 			err = json.NewDecoder(resp.Body).Decode(result)
@@ -328,6 +330,7 @@ func cacheResponse(res *http.Response, url string) {
 	}
 	var cR cachedResponse
 	cc := res.Header.Get("Cache-Control")
+	log.Prinf("spotify: Cache-Control: %s", cc)
 	var cci int
 	if cc != "" {
 		i := strings.Index(cc, "max-age=")
