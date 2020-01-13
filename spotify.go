@@ -242,6 +242,7 @@ func (c *Client) get(url string, result interface{}) error {
 		if resp.StatusCode == http.StatusNoContent {
 			return nil
 		}
+		log.Printf("spotify: respone: %s", resp.StatusCode)
 		if resp.StatusCode != http.StatusOK || resp.StatusCode != http.StatusNotModified {
 			return c.decodeError(resp)
 		}
