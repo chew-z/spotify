@@ -247,8 +247,11 @@ func (c *Client) get(url string, result interface{}) error {
 			return c.decodeError(resp)
 		}
 		if resp.StatusCode == http.StatusNotModified {
-			err = json.Unmarshal((*cachedBody), &result)
 			log.Println("spotify: using cached response")
+			err = json.Unmarshal((*cachedBody), &result)
+			if err != nil {
+				log.Panic(err)
+			}
 		}
 		if resp.StatusCode == http.StatusOK {
 			err = json.NewDecoder(resp.Body).Decode(result)
@@ -261,6 +264,67 @@ func (c *Client) get(url string, result interface{}) error {
 	}
 
 	return nil
+}
+
+func cacheResponse(res *http.Response, url string) {
+	type cachedResponse struct {
+		etag      string
+		bodyBytes *[]byte
+	}
+	var cR cachedResponse
+	cc := res.Header.Get("Cache-Control")
+	log.Printf("spotify: Cache-Control: %s", cc)
+	log.Printf("spotify: Expires: %s", res.Header.Get("Expires"))
+	var cci int
+	if cc != "" {
+		i := strings.Index(cc, "max-age=")
+		if i != -1 {
+			i += 8
+			j := i + 1
+			for ; j < len(cc); j++ {
+				if cc[j] >= '0' && cc[j] <= '9' {
+					continue
+				}
+				break
+			}
+			cci, _ = strconv.Atoi(cc[i:j])
+		}
+	}
+
+	var expires string
+	if cci == 0 {
+		expires = res.Header.Get("Expires")
+	}
+	iee := cci == 0 && isEmptyExpires(expires)
+	lm := res.Header.Get("Last-Modified")
+	et := res.Header.Get("ETag")
+	log.Printf("spotify: Last-Modified: %s", lm)
+	log.Printf("spotify: ETag: %s", et)
+	if lm == "" && et == "" && iee {
+		return
+	}
+
+	var ed time.Duration
+	if !iee {
+		if cci != 0 {
+			ed = time.Duration(cci) * time.Second
+		} else {
+			d, err := time.Parse(time.RFC1123, expires)
+			if err == nil {
+				ed = d.Sub(time.Now())
+			}
+		}
+	}
+	bodyBytes, _ := ioutil.ReadAll(res.Body)
+	if et != "" {
+		cR.etag = et
+	} else {
+		cR.etag = etag.Generate(string(bodyBytes), false)
+	}
+	log.Printf("Etag: %s", cR.etag)
+	cR.bodyBytes = &bodyBytes
+	kaszka.Set(url, cR, ed)
+	return
 }
 
 // Options contains optional parameters that can be provided
@@ -324,63 +388,6 @@ func (c *Client) NewReleases() (albums *SimpleAlbumPage, err error) {
 	return c.NewReleasesOpt(nil)
 }
 
-func cacheResponse(res *http.Response, url string) {
-	type cachedResponse struct {
-		etag      string
-		bodyBytes *[]byte
-	}
-	var cR cachedResponse
-	cc := res.Header.Get("Cache-Control")
-	log.Printf("spotify: Cache-Control: %s", cc)
-	var cci int
-	if cc != "" {
-		i := strings.Index(cc, "max-age=")
-		if i != -1 {
-			i += 8
-			j := i + 1
-			for ; j < len(cc); j++ {
-				if cc[j] >= '0' && cc[j] <= '9' {
-					continue
-				}
-				break
-			}
-			cci, _ = strconv.Atoi(cc[i:j])
-		}
-	}
-
-	var expires string
-	if cci == 0 {
-		expires = res.Header.Get("Expires")
-	}
-	iee := cci == 0 && isEmptyExpires(expires)
-	lm := res.Header.Get("Last-Modified")
-	et := res.Header.Get("ETag")
-	if lm == "" && et == "" && iee {
-		return
-	}
-
-	var ed time.Duration
-	if !iee {
-		if cci != 0 {
-			ed = time.Duration(cci) * time.Second
-		} else {
-			d, err := time.Parse(time.RFC1123, expires)
-			if err == nil {
-				ed = d.Sub(time.Now())
-			}
-		}
-	}
-	bodyBytes, _ := ioutil.ReadAll(res.Body)
-	if et != "" {
-		cR.etag = et
-	} else {
-		cR.etag = etag.Generate(string(bodyBytes), false)
-	}
-	log.Printf("Etag: %s", cR.etag)
-	cR.bodyBytes = &bodyBytes
-	kaszka.Set(url, cR, ed)
-	return
-}
 func isEmptyExpires(expires string) bool {
 	return expires == "" || expires == "-1" || expires == "0"
 }
