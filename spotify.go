@@ -64,7 +64,7 @@ type ID string
 
 type cachedResponse struct {
 	Etag   string
-	Result *[]byte 
+	Result *[]byte
 }
 
 var kaszka = cache.New(20*time.Minute, 3*time.Minute)
@@ -149,7 +149,7 @@ func (c *Client) decodeError(resp *http.Response) error {
 		// being too long.
 
 		e.E.Message = fmt.Sprintf("spotify: unexpected HTTP %d: %s (empty error)",
-		resp.StatusCode, http.StatusText(resp.StatusCode))
+			resp.StatusCode, http.StatusText(resp.StatusCode))
 	}
 
 	return e.E
@@ -190,8 +190,8 @@ func (c *Client) execute(req *http.Request, result interface{}, needsStatus ...i
 			return nil
 		}
 		if (resp.StatusCode >= 300 ||
-		resp.StatusCode < 200) &&
-		isFailure(resp.StatusCode, needsStatus) {
+			resp.StatusCode < 200) &&
+			isFailure(resp.StatusCode, needsStatus) {
 			return c.decodeError(resp)
 		}
 
@@ -219,8 +219,7 @@ func retryDuration(resp *http.Response) time.Duration {
 
 //
 func (c *Client) get(url string, result interface{}) error {
-	{
-		// resp, err := c.http.Get(url)
+	for {
 		req, _ := http.NewRequest("GET", url, nil)
 		var etag string
 		if k, found := kaszka.Get(url); found {
@@ -228,18 +227,16 @@ func (c *Client) get(url string, result interface{}) error {
 			etag = b.Etag
 			req.Header.Set("If-None-Match", etag)
 		}
-
 		resp, err := c.http.Do(req)
 		log.Printf("spotify: respone: %d", resp.StatusCode)
 		if err != nil {
 			return err
 		}
-		defer resp.Body.Close()
-		// TODO
-		// if resp.StatusCode == rateLimitExceededStatusCode && c.AutoRetry { //Never set c.AutoRetry to true as this is blocking
-		// 	time.Sleep(retryDuration(resp))
-		// 	continue
-		// }
+		// defer resp.Body.Close()
+		if resp.StatusCode == rateLimitExceededStatusCode && c.AutoRetry {
+			time.Sleep(retryDuration(resp))
+			continue
+		}
 		if resp.StatusCode == http.StatusNoContent {
 			return nil
 		}
@@ -251,34 +248,40 @@ func (c *Client) get(url string, result interface{}) error {
 			// err = json.Unmarshal((*cachedBody), result)
 			if k, found := kaszka.Get(url); found {
 				b := k.(*cachedResponse)
-			resp.Body = ioutil.NopCloser(bytes.NewBuffer(*b.Result))
+				resp.Body = ioutil.NopCloser(bytes.NewBuffer(*b.Result))
 				err = json.NewDecoder(resp.Body).Decode(result)
 			}
-			log.Printf("cached result: %v", result)
+			// log.Printf("cached result: %v", result)
+			break
 		}
 		if resp.StatusCode == http.StatusOK {
 			bodyBytes, _ := ioutil.ReadAll(resp.Body)
-			resp.Body.Close()  //  must close
+			resp.Body.Close() //  must close
 			resp.Body = ioutil.NopCloser(bytes.NewBuffer(bodyBytes))
 			err = json.NewDecoder(resp.Body).Decode(result)
 			if err != nil {
 				return err
 			}
-			log.Printf("result: %v", result)
-			resp.Body.Close()  //  must close
+			// log.Printf("result: %v", result)
+			resp.Body.Close() //  must close to reuse
 			resp.Body = ioutil.NopCloser(bytes.NewBuffer(bodyBytes))
-			cacheResponse(resp, url, &bodyBytes) // cache response
+			cacheResponse(resp, url, &bodyBytes) // cache response body
+			break
 		}
 
 	}
 	return nil
 }
 
+/*cacheResponse - is caching response body for url handling both
+Cache-Control and Etag (Spotify is using one or the other)
+Response is cached until expiration.
+*/
 func cacheResponse(res *http.Response, url string, body *[]byte) {
 	var cR cachedResponse
 	cc := res.Header.Get("Cache-Control")
-	log.Printf("spotify: Cache-Control: %s", cc)
-	log.Printf("spotify: Expires: %s", res.Header.Get("Expires"))
+	// log.Printf("spotify: Cache-Control: %s", cc)
+	// log.Printf("spotify: Expires: %s", res.Header.Get("Expires"))
 	var cci int
 	if cc != "" {
 		i := strings.Index(cc, "max-age=")
@@ -294,7 +297,7 @@ func cacheResponse(res *http.Response, url string, body *[]byte) {
 			cci, _ = strconv.Atoi(cc[i:j])
 		}
 	}
-
+	// Heuristics for guessing the expiration
 	var expires string
 	if cci == 0 {
 		expires = res.Header.Get("Expires")
@@ -302,12 +305,12 @@ func cacheResponse(res *http.Response, url string, body *[]byte) {
 	iee := cci == 0 && isEmptyExpires(expires)
 	lm := res.Header.Get("Last-Modified")
 	et := res.Header.Get("ETag")
-	log.Printf("spotify: Last-Modified: %s", lm)
-	log.Printf("spotify: ETag: %s", et)
+	// log.Printf("spotify: Last-Modified: %s", lm)
+	// log.Printf("spotify: ETag: %s", et)
 	if lm == "" && et == "" && iee {
 		return
 	}
-
+	// normalize to time.Duration for cache
 	var ed time.Duration
 	if !iee {
 		if cci != 0 {
@@ -322,9 +325,9 @@ func cacheResponse(res *http.Response, url string, body *[]byte) {
 	if et != "" {
 		cR.Etag = et
 	} else {
-		cR.Etag = etag.Generate(string(*body), false)
+		cR.Etag = etag.Generate(string(*body), false) // If Spotify have not provided ETag make it yourself
 	}
-	log.Printf("Etag: %s", cR.Etag)
+	// log.Printf("Etag: %s", cR.Etag)
 	cR.Result = body
 	kaszka.Set(url, &cR, ed)
 	return
