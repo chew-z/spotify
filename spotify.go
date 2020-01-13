@@ -16,7 +16,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/amalfra/etag"
 	"github.com/patrickmn/go-cache"
 )
 
@@ -225,7 +224,17 @@ func (c *Client) get(url string, result interface{}) error {
 		if k, found := kaszka.Get(url); found {
 			b := k.(*cachedResponse)
 			etag = b.Etag
-			req.Header.Set("If-None-Match", etag)
+			if etag != "" {
+				req.Header.Set("If-None-Match", etag)
+			} else {
+				body := ioutil.NopCloser(bytes.NewBuffer(*b.Result))
+				err := json.NewDecoder(body).Decode(result)
+				if err != nil {
+					return err
+				}
+				log.Println("spotify: using cached response")
+				break
+			}
 		}
 		resp, err := c.http.Do(req)
 		log.Printf("spotify: respone: %d", resp.StatusCode)
@@ -244,14 +253,16 @@ func (c *Client) get(url string, result interface{}) error {
 			return c.decodeError(resp)
 		}
 		if resp.StatusCode == http.StatusNotModified {
-			log.Println("spotify: using cached response")
 			// err = json.Unmarshal((*cachedBody), result)
 			if k, found := kaszka.Get(url); found {
 				b := k.(*cachedResponse)
 				resp.Body = ioutil.NopCloser(bytes.NewBuffer(*b.Result))
 				err = json.NewDecoder(resp.Body).Decode(result)
+				if err != nil {
+					return err
+				}
 			}
-			// log.Printf("cached result: %v", result)
+			log.Println("spotify: using ETag response")
 			break
 		}
 		if resp.StatusCode == http.StatusOK {
@@ -325,7 +336,8 @@ func cacheResponse(res *http.Response, url string, body *[]byte) {
 	if et != "" {
 		cR.Etag = et
 	} else {
-		cR.Etag = etag.Generate(string(*body), false) // If Spotify have not provided ETag make it yourself
+		cR.Etag = ""
+		// cR.Etag = etag.Generate(string(*body), false) // If Spotify have not provided ETag make it yourself
 	}
 	// log.Printf("Etag: %s", cR.Etag)
 	cR.Result = body
