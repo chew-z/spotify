@@ -12,7 +12,11 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
+	"strings"
 	"time"
+
+	"github.com/amalfra/etag"
+	"github.com/patrickmn/go-cache"
 )
 
 // Version is the version of this library.
@@ -56,6 +60,8 @@ type URI string
 // ID is a base-62 identifier for an artist, track, album, etc.
 // It can be found at the end of a spotify.URI.
 type ID string
+
+var kaszka = cache.New(20*time.Minute, 3*time.Minute)
 
 func (id *ID) String() string {
 	return string(*id)
@@ -205,32 +211,50 @@ func retryDuration(resp *http.Response) time.Duration {
 	return time.Duration(seconds) * time.Second
 }
 
+//
 func (c *Client) get(url string, result interface{}) error {
-	for {
-		resp, err := c.http.Get(url)
+	type cachedResponse struct {
+		etag      string
+		bodyBytes *[]byte
+	}
+	var cachedBody *[]byte
+	var etag string
+	k, found := kaszka.Get(url)
+	if found {
+		etag = k.(cachedResponse).etag
+		cachedBody = k.(cachedResponse).bodyBytes
+	}
+	{
+		// resp, err := c.http.Get(url)
+		req, _ := http.NewRequest("GET", url, nil)
+		req.Header.Set("If-None-Match", etag)
+		resp, err := c.http.Do(req)
 		if err != nil {
 			return err
 		}
-
 		defer resp.Body.Close()
-
-		if resp.StatusCode == rateLimitExceededStatusCode && c.AutoRetry {
-			time.Sleep(retryDuration(resp))
-			continue
-		}
+		// TODO
+		// if resp.StatusCode == rateLimitExceededStatusCode && c.AutoRetry { //Never set c.AutoRetry to true as this is blocking
+		// 	time.Sleep(retryDuration(resp))
+		// 	continue
+		// }
 		if resp.StatusCode == http.StatusNoContent {
 			return nil
 		}
-		if resp.StatusCode != http.StatusOK {
+		if resp.StatusCode != http.StatusOK || resp.StatusCode != http.StatusNotModified {
 			return c.decodeError(resp)
 		}
-
-		err = json.NewDecoder(resp.Body).Decode(result)
+		if resp.StatusCode == http.StatusNotModified {
+			err = json.Unmarshal((*cachedBody), &result)
+		}
+		if resp.StatusCode == http.StatusOK {
+			err = json.NewDecoder(resp.Body).Decode(result)
+			cacheResponse(resp, url) // cache response
+		}
 		if err != nil {
 			return err
 		}
 
-		break
 	}
 
 	return nil
@@ -295,4 +319,63 @@ func (c *Client) NewReleasesOpt(opt *Options) (albums *SimpleAlbumPage, err erro
 // This call requires bearer authorization.
 func (c *Client) NewReleases() (albums *SimpleAlbumPage, err error) {
 	return c.NewReleasesOpt(nil)
+}
+
+func cacheResponse(res *http.Response, url string) {
+	type cachedResponse struct {
+		etag      string
+		bodyBytes *[]byte
+	}
+	var cR cachedResponse
+	cc := res.Header.Get("Cache-Control")
+	var cci int
+	if cc != "" {
+		i := strings.Index(cc, "max-age=")
+		if i != -1 {
+			i += 8
+			j := i + 1
+			for ; j < len(cc); j++ {
+				if cc[j] >= '0' && cc[j] <= '9' {
+					continue
+				}
+				break
+			}
+			cci, _ = strconv.Atoi(cc[i:j])
+		}
+	}
+
+	var expires string
+	if cci == 0 {
+		expires = res.Header.Get("Expires")
+	}
+	iee := cci == 0 && isEmptyExpires(expires)
+	lm := res.Header.Get("Last-Modified")
+	et := res.Header.Get("ETag")
+	if lm == "" && et == "" && iee {
+		return
+	}
+
+	var ed time.Duration
+	if !iee {
+		if cci != 0 {
+			ed = time.Duration(cci) * time.Second
+		} else {
+			d, err := time.Parse(time.RFC1123, expires)
+			if err == nil {
+				ed = d.Sub(time.Now())
+			}
+		}
+	}
+	bodyBytes, _ := ioutil.ReadAll(res.Body)
+	if et != "" {
+		cR.etag = et
+	} else {
+		cR.etag = etag.Generate(string(bodyBytes), false)
+	}
+	cR.bodyBytes = &bodyBytes
+	kaszka.Set(url, cR, ed)
+	return
+}
+func isEmptyExpires(expires string) bool {
+	return expires == "" || expires == "-1" || expires == "0"
 }
