@@ -330,7 +330,7 @@ func cacheResponse(res *http.Response, url string) {
 	}
 	var cR cachedResponse
 	cc := res.Header.Get("Cache-Control")
-	fmt.Printf("spotify: Cache-Control: %s", cc)
+	log.Printf("spotify: Cache-Control: %s", cc)
 	var cci int
 	if cc != "" {
 		i := strings.Index(cc, "max-age=")
@@ -375,7 +375,7 @@ func cacheResponse(res *http.Response, url string) {
 	} else {
 		cR.etag = etag.Generate(string(bodyBytes), false)
 	}
-	fmt.Printf("Etag: %s", cR.etag)
+	log.Printf("Etag: %s", cR.etag)
 	cR.bodyBytes = &bodyBytes
 	kaszka.Set(url, cR, ed)
 	return
