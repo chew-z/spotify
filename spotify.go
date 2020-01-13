@@ -230,6 +230,7 @@ func (c *Client) get(url string, result interface{}) error {
 		req, _ := http.NewRequest("GET", url, nil)
 		req.Header.Set("If-None-Match", etag)
 		resp, err := c.http.Do(req)
+		log.Printf("spotify: respone: %s", resp.StatusCode)
 		if err != nil {
 			return err
 		}
@@ -242,7 +243,6 @@ func (c *Client) get(url string, result interface{}) error {
 		if resp.StatusCode == http.StatusNoContent {
 			return nil
 		}
-		log.Printf("spotify: respone: %s", resp.StatusCode)
 		if resp.StatusCode != http.StatusOK || resp.StatusCode != http.StatusNotModified {
 			return c.decodeError(resp)
 		}
