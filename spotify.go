@@ -248,7 +248,7 @@ func (c *Client) get(url string, result interface{}) error {
 		}
 		if resp.StatusCode == http.StatusNotModified {
 			log.Println("spotify: using cached response")
-			err = json.Unmarshal((*cachedBody), &result)
+			err = json.Unmarshal((cachedBody), &result)
 			if err != nil {
 				log.Panic(err)
 			}
@@ -269,7 +269,7 @@ func (c *Client) get(url string, result interface{}) error {
 func cacheResponse(res *http.Response, url string) {
 	type cachedResponse struct {
 		etag      string
-		bodyBytes *[]byte
+		bodyBytes []byte
 	}
 	var cR cachedResponse
 	cc := res.Header.Get("Cache-Control")
