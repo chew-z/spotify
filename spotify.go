@@ -335,9 +335,9 @@ func cacheResponse(res *http.Response, url string, body *[]byte) {
 		}
 	}
 	log.Printf("Expires: %s", duration(ed))
-	if et != "" {
+	if et == "" {
 		if ed > 0.0 {
-			cR.Etag = etag.Generate(string(*body), false) // If Spotify have not provided ETag make it yourself
+			log.Println(etag.Generate(string(*body), false)) // If Spotify have not provided ETag make it yourself
 			cR.Result = body
 			kaszka.Set(url, &cR, ed)
 		}
@@ -345,7 +345,6 @@ func cacheResponse(res *http.Response, url string, body *[]byte) {
 		cR.Etag = et
 		cR.Result = body
 		kaszka.SetDefault(url, &cR)
-		// log.Printf("Etag: %s", cR.Etag)
 	}
 	return
 }
