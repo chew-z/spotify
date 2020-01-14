@@ -291,8 +291,7 @@ Response is cached until expiration.
 func cacheResponse(res *http.Response, url string, body *[]byte) {
 	var cR cachedResponse
 	cc := res.Header.Get("Cache-Control")
-	// log.Printf("spotify: Cache-Control: %s", cc)
-	// log.Printf("spotify: Expires: %s", res.Header.Get("Expires"))
+	log.Printf("spotify: Cache-Control: %s", cc)
 	var cci int
 	if cc != "" {
 		i := strings.Index(cc, "max-age=")
@@ -312,12 +311,13 @@ func cacheResponse(res *http.Response, url string, body *[]byte) {
 	var expires string
 	if cci == 0 {
 		expires = res.Header.Get("Expires")
+		log.Printf("spotify: Expires: %s", res.Header.Get("Expires"))
 	}
 	iee := cci == 0 && isEmptyExpires(expires)
 	lm := res.Header.Get("Last-Modified")
 	et := res.Header.Get("ETag")
-	// log.Printf("spotify: Last-Modified: %s", lm)
-	// log.Printf("spotify: ETag: %s", et)
+	log.Printf("spotify: Last-Modified: %s", lm)
+	log.Printf("spotify: ETag: %s", et)
 	if lm == "" && et == "" && iee {
 		return
 	}
@@ -339,8 +339,8 @@ func cacheResponse(res *http.Response, url string, body *[]byte) {
 	} else {
 		cR.Etag = ""
 		// cR.Etag = etag.Generate(string(*body), false) // If Spotify have not provided ETag make it yourself
+		// log.Printf("Etag: %s", cR.Etag)
 	}
-	// log.Printf("Etag: %s", cR.Etag)
 	cR.Result = body
 	if ed > 0.0 {
 		kaszka.Set(url, &cR, ed)
