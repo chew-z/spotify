@@ -252,7 +252,7 @@ func (c *Client) get(url string, result interface{}) error {
 			return c.decodeError(resp)
 		}
 		if resp.StatusCode == http.StatusNotModified {
-			log.Printf("spotify: respone: %d", resp.StatusCode)
+			log.Printf("spotify: response: %d", resp.StatusCode)
 			if k, found := kaszka.Get(url); found {
 				b := k.(*cachedResponse)
 				resp.Body = ioutil.NopCloser(bytes.NewBuffer(*b.Result))
@@ -265,6 +265,7 @@ func (c *Client) get(url string, result interface{}) error {
 			break
 		}
 		if resp.StatusCode == http.StatusOK {
+			log.Printf("spotify: response: %d", resp.StatusCode)
 			bodyBytes, _ := ioutil.ReadAll(resp.Body)
 			resp.Body.Close() //  must close
 			resp.Body = ioutil.NopCloser(bytes.NewBuffer(bodyBytes))
@@ -332,6 +333,7 @@ func cacheResponse(res *http.Response, url string, body *[]byte) {
 			}
 		}
 	}
+	log.Printf("Expires: %s", duration(ed))
 	if et != "" {
 		cR.Etag = et
 	} else {
@@ -340,10 +342,33 @@ func cacheResponse(res *http.Response, url string, body *[]byte) {
 	}
 	// log.Printf("Etag: %s", cR.Etag)
 	cR.Result = body
-	if float64(ed) > 0.0 {
+	if ed > 0.0 {
 		kaszka.Set(url, &cR, ed)
 	}
 	return
+}
+
+func duration(d time.Duration) string {
+	const (
+		day  = time.Minute * 60 * 24
+		year = 365 * day
+	)
+	if d < day {
+		return d.String()
+	}
+
+	var b strings.Builder
+	if d >= year {
+		years := d / year
+		fmt.Fprintf(&b, "%dy", years)
+		d -= years * year
+	}
+
+	days := d / day
+	d -= days * day
+	fmt.Fprintf(&b, "%dd%s", days, d)
+
+	return b.String()
 }
 
 // Options contains optional parameters that can be provided
