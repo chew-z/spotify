@@ -261,8 +261,8 @@ func (c *Client) get(url string, result interface{}) error {
 				if err != nil {
 					return err
 				}
+				log.Println("spotify: using ETag response")
 			}
-			log.Println("spotify: using ETag response")
 			break
 		}
 		if resp.StatusCode == http.StatusOK {
@@ -312,12 +312,12 @@ func cacheResponse(res *http.Response, url string, body *[]byte) {
 	var expires string
 	if cci == 0 {
 		expires = res.Header.Get("Expires")
-		log.Printf("spotify: Expires: %s", res.Header.Get("Expires"))
+		// log.Printf("spotify: Expires: %s", res.Header.Get("Expires"))
 	}
 	iee := cci == 0 && isEmptyExpires(expires)
 	lm := res.Header.Get("Last-Modified")
 	et := res.Header.Get("ETag")
-	log.Printf("spotify: Last-Modified: %s", lm)
+	// log.Printf("spotify: Last-Modified: %s", lm)
 	log.Printf("spotify: ETag: %s", et)
 	if lm == "" && et == "" && iee {
 		return
