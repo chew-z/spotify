@@ -16,6 +16,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/amalfra/etag"
 	"github.com/patrickmn/go-cache"
 )
 
@@ -335,15 +336,16 @@ func cacheResponse(res *http.Response, url string, body *[]byte) {
 	}
 	log.Printf("Expires: %s", duration(ed))
 	if et != "" {
-		cR.Etag = et
+		if ed > 0.0 {
+			cR.Etag = etag.Generate(string(*body), false) // If Spotify have not provided ETag make it yourself
+			cR.Result = body
+			kaszka.Set(url, &cR, ed)
+		}
 	} else {
-		cR.Etag = ""
-		// cR.Etag = etag.Generate(string(*body), false) // If Spotify have not provided ETag make it yourself
+		cR.Etag = et
+		cR.Result = body
+		kaszka.SetDefault(url, &cR)
 		// log.Printf("Etag: %s", cR.Etag)
-	}
-	cR.Result = body
-	if ed > 0.0 {
-		kaszka.Set(url, &cR, ed)
 	}
 	return
 }
