@@ -237,7 +237,6 @@ func (c *Client) get(url string, result interface{}) error {
 			}
 		}
 		resp, err := c.http.Do(req)
-		log.Printf("spotify: respone: %d", resp.StatusCode)
 		if err != nil {
 			return err
 		}
@@ -253,7 +252,7 @@ func (c *Client) get(url string, result interface{}) error {
 			return c.decodeError(resp)
 		}
 		if resp.StatusCode == http.StatusNotModified {
-			// err = json.Unmarshal((*cachedBody), result)
+			log.Printf("spotify: respone: %d", resp.StatusCode)
 			if k, found := kaszka.Get(url); found {
 				b := k.(*cachedResponse)
 				resp.Body = ioutil.NopCloser(bytes.NewBuffer(*b.Result))
@@ -341,7 +340,9 @@ func cacheResponse(res *http.Response, url string, body *[]byte) {
 	}
 	// log.Printf("Etag: %s", cR.Etag)
 	cR.Result = body
-	kaszka.Set(url, &cR, ed)
+	if float64(ed) > 0.0 {
+		kaszka.Set(url, &cR, ed)
+	}
 	return
 }
 
