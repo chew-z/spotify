@@ -16,7 +16,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/amalfra/etag"
 	"github.com/patrickmn/go-cache"
 )
 
@@ -261,7 +260,7 @@ func (c *Client) get(url string, result interface{}) error {
 				if err != nil {
 					return err
 				}
-				log.Println("spotify: using ETag response")
+				// log.Println("spotify: using ETag response")
 			}
 			break
 		}
@@ -292,7 +291,7 @@ Response is cached until expiration.
 func cacheResponse(res *http.Response, url string, body *[]byte) {
 	var cR cachedResponse
 	cc := res.Header.Get("Cache-Control")
-	log.Printf("spotify: Cache-Control: %s", cc)
+	// log.Printf("spotify: Cache-Control: %s", cc)
 	var cci int
 	if cc != "" {
 		i := strings.Index(cc, "max-age=")
@@ -318,7 +317,7 @@ func cacheResponse(res *http.Response, url string, body *[]byte) {
 	lm := res.Header.Get("Last-Modified")
 	et := res.Header.Get("ETag")
 	// log.Printf("spotify: Last-Modified: %s", lm)
-	log.Printf("spotify: ETag: %s", et)
+	// log.Printf("spotify: ETag: %s", et)
 	if lm == "" && et == "" && iee {
 		return
 	}
@@ -334,10 +333,10 @@ func cacheResponse(res *http.Response, url string, body *[]byte) {
 			}
 		}
 	}
-	log.Printf("Expires: %s", duration(ed))
+	// log.Printf("Expires: %s", duration(ed))
 	if et == "" {
 		if ed > 0.0 {
-			log.Println(etag.Generate(string(*body), false)) // If Spotify have not provided ETag make it yourself
+			// log.Println(etag.Generate(string(*body), false)) // If Spotify have not provided ETag make it yourself
 			cR.Result = body
 			kaszka.Set(url, &cR, ed)
 		}
@@ -361,13 +360,13 @@ func duration(d time.Duration) string {
 	var b strings.Builder
 	if d >= year {
 		years := d / year
-		fmt.Fprintf(&b, "%dy", years)
+		// fmt.Fprintf(&b, "%dy", years)
 		d -= years * year
 	}
 
 	days := d / day
 	d -= days * day
-	fmt.Fprintf(&b, "%dd%s", days, d)
+	// fmt.Fprintf(&b, "%dd%s", days, d)
 
 	return b.String()
 }
