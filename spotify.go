@@ -44,13 +44,25 @@ const (
 
 const baseAddress = "https://api.spotify.com/v1/"
 
+var kaszka = cache.New(20*time.Minute, 3*time.Minute)
+
 // Client is a client for working with the Spotify Web API.
-// To create an authenticated client, use the `Authenticator.NewClient` method.
+// It is created by `NewClient` and `Authenticator.NewClient`.
 type Client struct {
 	http    *http.Client
 	baseURL string
 
 	AutoRetry bool
+}
+
+// NewClient returns a client for working with the Spotify Web API.
+// The provided HTTP client must include the user's access token in each request;
+// if you do not have such a client, use the `Authenticator.NewClient` method instead.
+func NewClient(client *http.Client) Client {
+	return Client{
+		http:    client,
+		baseURL: baseAddress,
+	}
 }
 
 // URI identifies an artist, album, track, or category.  For example,
@@ -61,15 +73,13 @@ type URI string
 // It can be found at the end of a spotify.URI.
 type ID string
 
+func (id *ID) String() string {
+	return string(*id)
+}
+
 type cachedResponse struct {
 	Etag   string
 	Result *[]byte
-}
-
-var kaszka = cache.New(20*time.Minute, 3*time.Minute)
-
-func (id *ID) String() string {
-	return string(*id)
 }
 
 // Followers contains information about the number of people following a
@@ -215,8 +225,6 @@ func retryDuration(resp *http.Response) time.Duration {
 	}
 	return time.Duration(seconds) * time.Second
 }
-
-//
 func (c *Client) get(url string, result interface{}) error {
 	for {
 		req, _ := http.NewRequest("GET", url, nil)
@@ -430,8 +438,4 @@ func (c *Client) NewReleasesOpt(opt *Options) (albums *SimpleAlbumPage, err erro
 // This call requires bearer authorization.
 func (c *Client) NewReleases() (albums *SimpleAlbumPage, err error) {
 	return c.NewReleasesOpt(nil)
-}
-
-func isEmptyExpires(expires string) bool {
-	return expires == "" || expires == "-1" || expires == "0"
 }

@@ -26,8 +26,8 @@ type FullArtist struct {
 	Popularity int `json:"popularity"`
 	// A list of genres the artist is associated with.  For example, "Prog Rock"
 	// or "Post-Grunge".  If not yet classified, the slice is empty.
-	Genres    []string `json:"genres"`
-	Followers Followers
+	Genres    []string  `json:"genres"`
+	Followers Followers `json:"followers"`
 	// Images of the artist in various sizes, widest first.
 	Images []Image `json:"images"`
 }
@@ -105,30 +105,29 @@ func (c *Client) GetRelatedArtists(id ID) ([]FullArtist, error) {
 // GetArtistAlbums gets Spotify catalog information about an artist's albums.
 // It is equivalent to GetArtistAlbumsOpt(artistID, nil).
 func (c *Client) GetArtistAlbums(artistID ID) (*SimpleAlbumPage, error) {
-	return c.GetArtistAlbumsOpt(artistID, nil, nil)
+	return c.GetArtistAlbumsOpt(artistID, nil)
 }
 
 // GetArtistAlbumsOpt is just like GetArtistAlbums, but it accepts optional
 // parameters used to filter and sort the result.
 //
-// The AlbumType argument can be used to find a particular type of album.  Search
-// for multiple types by OR-ing the types together.
-func (c *Client) GetArtistAlbumsOpt(artistID ID, options *Options, t *AlbumType) (*SimpleAlbumPage, error) {
+// The AlbumType argument can be used to find a particular types of album.
+// If the market (Options.Country) is not specified, Spotify will likely return a lot
+// of duplicates (one for each market in which the album is available)
+func (c *Client) GetArtistAlbumsOpt(artistID ID, options *Options, ts ...AlbumType) (*SimpleAlbumPage, error) {
 	spotifyURL := fmt.Sprintf("%sartists/%s/albums", c.baseURL, artistID)
 	// add optional query string if options were specified
 	values := url.Values{}
-	if t != nil {
-		values.Set("album_type", t.encode())
+	if ts != nil {
+		types := make([]string, len(ts))
+		for i := range ts {
+			types[i] = ts[i].encode()
+		}
+		values.Set("include_groups", strings.Join(types, ","))
 	}
 	if options != nil {
 		if options.Country != nil {
 			values.Set("market", *options.Country)
-		} else {
-			// if the market is not specified, Spotify will likely return a lot
-			// of duplicates (one for each market in which the album is available)
-			// - prevent this behavior by falling back to the US by default
-			// TODO: would this ever be the desired behavior?
-			values.Set("market", CountryUSA)
 		}
 		if options.Limit != nil {
 			values.Set("limit", strconv.Itoa(*options.Limit))
